@@ -22,41 +22,56 @@ Lancement : node of.js
 
 var fs = require('fs');
 var http = require('http');
-var url = require('url');
 var request = require('request');
 var rss = require('node-rss');
+//var codein = require('node-codein');
 
 var settings = JSON.parse(fs.readFileSync('config.json', encoding="ascii"));
 httpPort = settings.httpPort || 8001;
-console.log(httpPort);
+httpHost = settings.httpHost || "127.0.0.1";
 
 var httpServer = http.createServer(onRequest);
-httpServer.listen(httpPort);
-console.log("Server running at http://127.0.0.1:" + httpPort);
+httpServer.listen(httpPort, httpHost);
+console.log("Server running at http://"+ httpHost + ":" + httpPort);
 
 function onRequest(request, response) {
-    getFeed(settings, response, request)
 
+    fs.readFile(settings.feedsDir + request.url, function (err, data) {
+        if (err) {
+            if (settings.debug) console.log('create feed');
+            getFeed(settings, request, response);
+        } else {
+            if (settings.debug) console.log('send feed from file');
+            sendFeed(settings, request, response);
+        } 
+    });
 }
 
-function getFeed(settings, httpResponse, httpRequest) {
-    var feedLink = url.parse(httpRequest.url).href;
-    var city = url.parse(httpRequest.url).pathname;
+/*
+ * get HTML page and generate a RSS feed
+ * save feed to file
+ * send feed to client
+*/
+
+function getFeed(settings, httpRequest, httpResponse) {
+    var city = httpRequest.url;
     city = city.replace(/\//gi, "");
+    var siteUrl = settings.urlBase + settings.urlPathBase + city;
+    var feedLink = 'http://' + httpRequest.headers.host + httpRequest.url;
 
     // Define new feed options
     var feed = rss.createNewFeed(
-                                settings.feedTitle, settings.feedSiteUrl,
-                                settings.feedDescription,
+                                'Ouest France ' + city, siteUrl,
+                                '',
                                 'Flyinva <flyinva@kabano.net>',
                                 feedLink, 
                                 {language : settings.feedLang }
                                 );
 
-    console.log('GET: ' + settings.urlBase + settings.urlPathBase + city);
+    console.log('GET: ' + siteUrl);
 
     // request page + add new feed items
-    request(settings.urlBase + settings.urlPathBase + city, function (error, response, body) {
+    request(siteUrl, function (error, response, body) {
         if (!error && response.statusCode == 200) {
             var cheerio = require('cheerio'), $ = cheerio.load(body);
             
@@ -77,10 +92,22 @@ function getFeed(settings, httpResponse, httpRequest) {
                 feed.addNewItem(title, settings.urlBase + url, time, description, {});
             });
             
-            // complete feed on stdin
             var xmlFeed = rss.getFeedXML(feed);
-            httpResponse.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
-            httpResponse.end(xmlFeed);
+            console.log(settings.feedsDir + httpRequest.url);
+            fs.writeFile(
+                    settings.feedsDir + httpRequest.url, 
+                    xmlFeed, 
+                    function (err) {
+                        if (err) throw err;
+                        sendFeed(settings, httpRequest, httpResponse);
+            });
         }
     })
 }
+
+function sendFeed(settings, httpRequest, httpResponse) {
+    feed = fs.readFileSync(settings.feedsDir + httpRequest.url, 'utf8');
+    httpResponse.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
+    httpResponse.end(feed);
+}
+
