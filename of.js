@@ -29,6 +29,7 @@ var rss = require('node-rss');
 var settings = JSON.parse(fs.readFileSync('config.json', encoding="ascii"));
 httpPort = settings.httpPort || 8001;
 httpHost = settings.httpHost || "127.0.0.1";
+var cacheDuration = settings.cacheDuration || 120;
 
 var httpServer = http.createServer(onRequest);
 httpServer.listen(httpPort, httpHost);
@@ -36,13 +37,31 @@ console.log("Server running at http://"+ httpHost + ":" + httpPort);
 
 function onRequest(request, response) {
 
-    fs.readFile(settings.feedsDir + request.url, function (err, data) {
+    fs.stat(settings.feedsDir + request.url, function (err, stats) {
         if (err) {
-            if (settings.debug) console.log('create feed');
-            getFeed(settings, request, response);
+            if (settings.debug) console.log(remotePort + 'create feed');
+            getFeed(
+                settings,
+                request,
+                response,
+                function() {sendFeed(settings, request, response);}
+                );
         } else {
-            if (settings.debug) console.log('send feed from file');
-            sendFeed(settings, request, response);
+            var now = Date.now();
+            var fileDuration = (now - stats.ctime) / 1000 / 60;
+
+            if (settings.debug) console.log("file created " + fileDuration + " min ago");
+
+            if ( fileDuration > settings.cacheDuration ) {
+                getFeed(
+                    settings,
+                    request,
+                    response,
+                    function() {sendFeed(settings, request, response);}
+                );
+            } else {
+                sendFeed(settings, request, response);
+            }
         } 
     });
 }
@@ -53,7 +72,7 @@ function onRequest(request, response) {
  * send feed to client
 */
 
-function getFeed(settings, httpRequest, httpResponse) {
+function getFeed(settings, httpRequest, httpResponse, callback) {
     var city = httpRequest.url;
     city = city.replace(/\//gi, "");
     var siteUrl = settings.urlBase + settings.urlPathBase + city;
@@ -93,14 +112,17 @@ function getFeed(settings, httpRequest, httpResponse) {
             });
             
             var xmlFeed = rss.getFeedXML(feed);
-            console.log(settings.feedsDir + httpRequest.url);
+            if (settings.debug)  console.log('write: ' + settings.feedsDir + httpRequest.url);
+          
             fs.writeFile(
                     settings.feedsDir + httpRequest.url, 
                     xmlFeed, 
                     function (err) {
                         if (err) throw err;
-                        sendFeed(settings, httpRequest, httpResponse);
-            });
+                        //sendFeed(settings, httpRequest, httpResponse);
+                        callback();
+                    }
+            );
         }
     })
 }
@@ -109,5 +131,6 @@ function sendFeed(settings, httpRequest, httpResponse) {
     feed = fs.readFileSync(settings.feedsDir + httpRequest.url, 'utf8');
     httpResponse.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
     httpResponse.end(feed);
+    if (settings.debug) console.log('feed sent from file');
 }
 
