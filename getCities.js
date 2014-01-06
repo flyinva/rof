@@ -14,8 +14,7 @@ var async = require('async');
 var alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
 var localisations = new Array();
-var cityNames = new Array();
-var cityUrls = new Array();
+var cities = new Object();
 
 var getLocalisation = function getLocalisation(character, cb) {
     client.get('/recherche/commune/' + character, function(err, res, body) {
@@ -35,19 +34,14 @@ async.map(alphabet, getLocalisation, function(err, results){
     }
  
     length = localisations.length;
-    var indexCity = 0;
     for (i = 0; i < length; i++) {
         if ( localisations[i].url != '') {
-            cityNames[indexCity] = localisations[i].libelle,
-            cityUrls[indexCity] = localisations[i].url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1");
-            indexCity++;
+            cities[localisations[i].libelle] = localisations[i].url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1");
         } 
     }
 
-    var jqueryJson = { 'names': cityNames, 'urls': cityUrls };
-
     //console.log(JSON.stringify(localisationsFinal));
-    fs.writeFileSync('cities.json', JSON.stringify(jqueryJson));
+    fs.writeFileSync('cities.json', JSON.stringify(cities));
     console.log('cities.json');
 });
 
