@@ -4,7 +4,7 @@ Un web service permet de trouver cette page d'après le nom. Il renvoie un JSON 
 
 Ce script interroge le web service pour chaque lettre de l'alphabet pour obtenir la liste complete (on interroge le web service pour a puis pour b, etc.).
 
-Il concatène le résultat et fabrique une liste compatible avec l'autocomplétion de jQuery (label, value)
+Il concatène le résultat et fabrique une liste compatible avec l'autocomplétion de jQuery 
 
 */
 var fs = require('fs');
@@ -14,7 +14,8 @@ var async = require('async');
 var alphabet = 'abcdefghijklmnopqrstuvwxyz'.split('');
 
 var localisations = new Array();
-var localisationsFinal = new Array();
+var cityNames = new Array();
+var cityUrls = new Array();
 
 var getLocalisation = function getLocalisation(character, cb) {
     client.get('/recherche/commune/' + character, function(err, res, body) {
@@ -34,18 +35,19 @@ async.map(alphabet, getLocalisation, function(err, results){
     }
  
     length = localisations.length;
-    var indexFinal = 0;
+    var indexCity = 0;
     for (i = 0; i < length; i++) {
         if ( localisations[i].url != '') {
-            localisationsFinal[indexFinal] = { 
-                "label": localisations[i].libelle,
-                "value": localisations[i].url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1")};
-                indexFinal++;
+            cityNames[indexCity] = localisations[i].libelle,
+            cityUrls[indexCity] = localisations[i].url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1");
+            indexCity++;
         } 
     }
 
+    var jqueryJson = { 'names': cityNames, 'urls': cityUrls };
+
     //console.log(JSON.stringify(localisationsFinal));
-    fs.writeFileSync('cities.json', JSON.stringify(localisationsFinal));
+    fs.writeFileSync('cities.json', JSON.stringify(jqueryJson));
     console.log('cities.json');
 });
 
