@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <title>ROF : les RSS de Ouest-France</title>
+     <link rel="stylesheet" href="//code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css">
+    <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+    <script src="//code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
+    <!--
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+    -->
+  </head>
+  <body>
+    <h1>Flux RSS des locales de Ouest-France</h1>
+    <label for="city">Entrez votre ville: </label>
+    <input id="city">
+    <div id="results">  
+    </div>
+    <script>
+        $.getJSON(  'cities.json', 
+                    function(json) {
+                        $( "#city" ).autocomplete({
+                            source: Object.keys(json),
+                            minLength: 3,
+                            select: function( event, ui ) {document.getElementById('results').innerHTML = '<a href="'+json[ui.item.value]+'">Lien RSS</a>';},
+                        });
+                    }
+        );
+    </script>
+  </body>
+</html>
