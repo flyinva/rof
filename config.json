@@ -1,0 +1,8 @@
+{
+    "urlBase" : "http://www.ouest-france.fr",
+    "urlPathBase" : "/liste/petite-locale-fait-du-jour/",
+    "feedLang" : "fr",
+    "feedsDir" : "rss",
+    "cacheDuration" : 2,
+    "debug" : true
+}
