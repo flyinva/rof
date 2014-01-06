@@ -7,6 +7,7 @@ Ce script interroge le web service pour chaque lettre de l'alphabet pour obtenir
 Il concatène le résultat et fabrique une liste compatible avec l'autocomplétion de jQuery (label, value)
 
 */
+var fs = require('fs');
 var request = require('request-json');
 var client = request.newClient('http://www.ouest-france.fr');
 var async = require('async');
@@ -33,14 +34,18 @@ async.map(alphabet, getLocalisation, function(err, results){
     }
  
     length = localisations.length;
+    var indexFinal = 0;
     for (i = 0; i < length; i++) {
-        if ( localisations[i].libelle !== "aucun résultat") {
-            localisationsFinal[i] = { 
+        if ( localisations[i].url != '') {
+            localisationsFinal[indexFinal] = { 
                 "label": localisations[i].libelle,
                 "value": localisations[i].url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1")};
-        }
+                indexFinal++;
+        } 
     }
 
-    console.log(JSON.stringify(localisationsFinal));
+    //console.log(JSON.stringify(localisationsFinal));
+    fs.writeFileSync('cities.json', JSON.stringify(localisationsFinal));
+    console.log('cities.json');
 });
 
