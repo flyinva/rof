@@ -39,7 +39,7 @@ function onRequest(request, response) {
 
     fs.stat(settings.feedsDir + request.url, function (err, stats) {
         if (err) {
-            if (settings.debug) console.log(remotePort + 'create feed');
+            if (settings.debug) console.log('create feed');
             getFeed(
                 settings,
                 request,
