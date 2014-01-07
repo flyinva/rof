@@ -74,8 +74,9 @@ function onRequest(request, response) {
 function getFeed(settings, httpRequest, httpResponse, callback) {
     var city = httpRequest.url;
     city = city.replace(/\//gi, "");
+    var httpHost =  httpRequest.headers['x-forwarded-host'] || httpRequest.headers.host;
     var siteUrl = settings.urlBase + settings.urlPathBase + city;
-    var feedLink = 'http://' + httpRequest.headers.host + httpRequest.url;
+    var feedLink = 'http://' + httpHost + httpRequest.url;
 
     // Define new feed options
     var feed = rss.createNewFeed(
