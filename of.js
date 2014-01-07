@@ -24,6 +24,7 @@ var fs = require('fs');
 var http = require('http');
 var request = require('request');
 var rss = require('node-rss');
+require("/usr/local/lib/node_modules/node-codein");
 
 var settings = JSON.parse(fs.readFileSync('config.json', encoding="ascii"));
 httpPort = settings.httpPort || 8001;
@@ -67,47 +68,61 @@ function getFeed(settings, httpRequest, httpResponse, callback) {
 	var httpHost =  httpRequest.headers['x-forwarded-host'] || httpRequest.headers.host;
 	var siteUrl = settings.urlBase + settings.urlPathBase + city;
 	var feedLink = 'http://' + httpHost + httpRequest.url;
-
-	// Define new feed options
-	var feed = rss.createNewFeed(
-								'Ouest France ' + city, siteUrl,
-								'',
-								'Flyinva <flyinva@kabano.net>',
-								feedLink, 
-								{language : settings.feedLang }
-								);
+	
+	var feed = newFeedHeader(settings, city, siteUrl, feedLink);
 
 	console.log('GET: ' + siteUrl);
 
-	// request page + add new feed items
+	// request page, parse and add new feed items
 	request(siteUrl, function (error, response, body) {
-		if (!error && response.statusCode == 200) {
-			var cheerio = require('cheerio'), $ = cheerio.load(body);
-			
-			$('article').each(function(i, elem) {
-				
-				var description = this.find('p').text();
-				description = description.replace(/[\r\n]/gm, "");
-				description = description.replace(/\s{2,}/g, "");
-				
-				var title = this.find('h2').text();
-				title = title.replace(/[\r\n]\s{2,}/gm, "");
-				title = title.replace(/\s{2,}/g, "");
-				
-				var url = this.find('a').attr('href');
-
-				var time = this.find('time').attr('datetime');
-				
-				feed.addNewItem(title, settings.urlBase + url, time, description, {});
-			});
-			
-			var xmlFeed = rss.getFeedXML(feed);
-			if (settings.debug)  console.log('write: ' + settings.feedsDir + httpRequest.url);
-		  
-			writeFeedToFile(settings.feedsDir, httpRequest.url, xmlFeed, callback);
-
-		}
+		extractArticles(error, response, body, settings, httpRequest,  feed, callback);
 	})
+}
+
+function newFeedHeader (settings, city, url, link) {
+	// Define new feed options
+	var feed = rss.createNewFeed(
+								'Ouest France ' + city, url,
+								'',
+								'Flyinva <flyinva@kabano.net>',
+								link, 
+								{language : settings.feedLang }
+								);
+
+	return(feed);
+
+}
+
+function extractArticles (error, response, body, settings, request, feed, callback) {
+	if (!error && response.statusCode == 200) {
+		var cheerio = require('cheerio'), $ = cheerio.load(body);
+		
+		$('article').each( function(i, elem) { 
+			htmlToFeed(i, elem, feed, this)
+		});
+
+		if (settings.debug) console.log('write: ' + settings.feedsDir + request.url);
+		
+		var xmlFeed = rss.getFeedXML(feed);
+		writeFeedToFile(settings.feedsDir, request.url, xmlFeed, callback);
+
+	}
+}
+
+function htmlToFeed(i, elem, feed, article){
+	//console.log(that);
+	var description = article.find('p').text();
+	description = description.replace(/[\r\n]/gm, "");
+	description = description.replace(/\s{2,}/g, "");
+	
+	var title = article.find('h2').text();
+	title = title.replace(/[\r\n]\s{2,}/gm, "");
+	title = title.replace(/\s{2,}/g, "");
+	
+	var url = article.find('a').attr('href');
+	var time = article.find('time').attr('datetime');
+	
+	feed.addNewItem(title, settings.urlBase + url, time, description, {});
 }
 
 function writeFeedToFile (dir, url, feed, callback) {
