@@ -2,31 +2,64 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ROF : les RSS de Ouest-France</title>
-     <link rel="stylesheet" href="//code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css">
-    <script src="//code.jquery.com/jquery-1.9.1.js"></script>
-    <script src="//code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
-    <!--
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css">
+    <link rel="stylesheet" href="//netdna.bootstrapcdn.com/bootstrap/3.0.3/css/bootstrap.min.css">
     <link rel="stylesheet" href="style.css">
-    <script src="script.js"></script>
-    -->
   </head>
   <body>
-    <h1>Flux RSS des locales de Ouest-France</h1>
-    <label for="city">Entrez votre ville: </label>
-    <input id="city">
-    <div id="results">  
+    <div id="wrap">
+        
+        <div class="jumbotron">
+            <div class="container">
+                <h1>Flux RSS Ouest-France</h1>
+                <p>Le site <a href="http://ouest-france.fr">Ouest-France</a> ne propose pas de lien RSS pour les informations de chaque commune. Ce site propose de le générer à partir des pages Ouest-France. Pour cela, tapez le nom de votre commune, un lien vers le RSS apparaîtra.</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <label for="city">Entrez votre ville: </label>
+            <div class="input-group">
+                <span class="glyphicon glyphicon-map-marker input-group-addon"></span>
+                <input type="text" placeholder="Ville ou code postal" id="city" class="form-control">
+            </div>
+            <span id="results"></span>
+        </div>
     </div>
+
+    <div id="footer">
+            <p class="text-muted"><small>Ce site n'a aucun lien avec <a href="http://www.ouest-france.fr/qui-sommes-nous">Ouest-France</a>. Le <a href="https://github.com/flyinva/rof">code source de l'application</a> est disponible sous licence <a href="http://www.wtfpl.net/txt/copying/">WTFPL</a>. Auteur : Sylvain <a href="mailto:Flyinva+rof@Kabano.net"><img src="mail.png" alt="mail" height="20" width="28"></a><a href="https://twitter.com/fyinva"><img src="twitter-logo.png" width="20" height="20"></a></small></p>
+    </div>
+
+    <script src="//code.jquery.com/jquery-1.9.1.js"></script>
+    <script src="//code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
     <script>
-        $.getJSON(  'cities.json', 
-                    function(json) {
-                        $( "#city" ).autocomplete({
-                            source: Object.keys(json),
-                            minLength: 3,
-                            select: function( event, ui ) {document.getElementById('results').innerHTML = '<a href="'+json[ui.item.value]+'">Lien RSS</a>';},
-                        });
+        var input = $('#city');
+        input.autocomplete({
+            source: function (request, response) {
+                $.ajax({
+                    url: '/search/' + encodeURIComponent(request.term),
+                    dataType: 'json',
+                    success: function (data) {
+                        response($.map(data.localisations, function (item) {
+                            return {
+                                label: item.libelle,
+                                value: item.libelle.substr(0, item.libelle.length - 8),
+                                url: item.url
+                            };
+                        }));
                     }
-        );
+                });
+            },
+            autoFocus: true,
+            minLength: 3,
+            select: function( event, ui ) {
+						var feedUrl = ui.item.url.replace(/\/.+\/.+\/(.+)#resultat-recherche/, "$1");
+                        document.getElementById('results').innerHTML = '<img src="rss-icon.png" alt="RSS Icon" width="20", height="20"> <a href="'  + feedUrl + '">Lien RSS</a>'
+                        ;}
+        });
     </script>
+    <script src="//netdna.bootstrapcdn.com/bootstrap/3.0.3/js/bootstrap.min.js"></script>
   </body>
 </html>
