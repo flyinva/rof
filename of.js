@@ -40,7 +40,7 @@ function onRequest(request, response) {
 	fs.stat(settings.feedsDir + request.url, function (err, stats) {
 		if (err) {
 			if (settings.debug) console.log('create feed');
-			getFeed( settings, request, response, function() {sendFeed(settings, request, response);} );
+			createFeed( settings, request, response, function() {sendFeed(settings, request, response);} );
 		} else {
 			var now = Date.now();
 			var fileDuration = (now - stats.ctime) / 1000 / 60;
@@ -48,7 +48,7 @@ function onRequest(request, response) {
 			if (settings.debug) console.log("file created " + fileDuration + " min ago");
 
 			if ( fileDuration > settings.cacheDuration ) {
-				getFeed(settings, request, response, function() {sendFeed(settings, request, response);});
+				createFeed(settings, request, response, function() {sendFeed(settings, request, response);});
 			} else {
 				sendFeed(settings, request, response);
 			}
@@ -62,7 +62,7 @@ function onRequest(request, response) {
  * send feed to client
 */
 
-function getFeed(settings, httpRequest, httpResponse, callback) {
+function createFeed(settings, httpRequest, httpResponse, callback) {
 	var city = httpRequest.url;
 	city = city.replace(/\//gi, "");
 	var httpHost =  httpRequest.headers['x-forwarded-host'] || httpRequest.headers.host;
