@@ -1,7 +1,7 @@
 rof
 ===
 
-Flux RSS par commune pour ouest-france.fr
+Flux RSS par commune pour ouest-france.fr. Ce README est en français car ceux qui lisent OF sont a priori francophones ;-).
 
 ## installation
 
