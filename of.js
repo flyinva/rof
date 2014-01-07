@@ -24,7 +24,6 @@ var fs = require('fs');
 var http = require('http');
 var request = require('request');
 var rss = require('node-rss');
-//var codein = require('node-codein');
 
 var settings = JSON.parse(fs.readFileSync('config.json', encoding="ascii"));
 httpPort = settings.httpPort || 8001;
