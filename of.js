@@ -73,11 +73,15 @@ function createFeed(settings, httpRequest, httpResponse, callback) {
 	feed = newFeedHeader(settings, city, siteUrl, feedLink);
 
 	console.log('GET: ' + siteUrl);
+    
+    getNewsPage(siteUrl);
+}
 
+function getNewsPage(url) {
 	// request page, parse and add new feed items
-	request(siteUrl, function (error, response, body) {
+	request(url, function (error, response, body) {
 		extractArticles(error, response, body, settings, httpRequest,  feed, callback);
-	});
+	});  
 }
 
 function newFeedHeader(settings, city, url, link) {
