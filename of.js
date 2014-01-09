@@ -22,11 +22,12 @@ Lancement : node of.js
 
 
 
-var fs = require('fs');
-var http = require('http');
-var request = require('request');
-var rss = require('node-rss');
-//require("/usr/local/lib/node_modules/node-codein");
+var fs = require('fs'),
+    http = require('http'),
+    request = require('request'),
+    rss = require('node-rss'),
+    wait = require('wait.for');
+require("/usr/local/lib/node_modules/node-codein");
 
 var settings = JSON.parse(fs.readFileSync('config.json', encoding = "ascii"));
 var httpPort = settings.httpPort || 8001;
@@ -42,7 +43,7 @@ function onRequest(request, response) {
 	fs.stat(settings.feedsDir + request.url, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('create feed'); }
-			createFeed(settings, request, response, function () {sendFeed(settings, request, response); });
+			createFeed(settings, request, response, function () { sendFeed(settings, request, response); });
 		} else {
 			var fileDuration = (Date.now() - stats.ctime) / 1000 / 60;
 
@@ -64,21 +65,33 @@ function onRequest(request, response) {
 */
 
 function createFeed(settings, httpRequest, httpResponse, callback) {
-    var city, httpHost, siteUrl, feedLink, feed;
+    var city, httpHost, siteUrl, feedLink, feed, newsPageUrl;
     
-	city = httpRequest.url.replace(/\//gi, "");
+	//city = httpRequest.url.replace(/\//gi, "");
+	city = httpRequest.url;
 	httpHost =  httpRequest.headers['x-forwarded-host'] || httpRequest.headers.host;
-	siteUrl = settings.urlBase + settings.urlPathBase + city;
+	siteUrl = settings.urlBase + httpRequest.url;
 	feedLink = 'http://' + httpHost + httpRequest.url;
 	feed = newFeedHeader(settings, city, siteUrl, feedLink);
 
 	console.log('GET: ' + siteUrl);
-    
-    getNewsPage(siteUrl);
+    // need to newsPageUrl to continue with no callback hell
+    newsPageUrl = wait.launchFiber(findNewsPageUrl, siteUrl, settings.urlBase);
+    //if (settings.debug) { console.log("news page at " + newsPageUrl); }
+}
+
+function findNewsPageUrl(url){
+    var response, cheerio, newsPageUrl;
+	response = wait.for(request, url);
+    cheerio = require('cheerio'), $ = cheerio.load(response.body);
+    newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
+    if (settings.debug) { console.log('newsPageUrl: ' + newsPageUrl); };
+    getNewsPage(settings.urlBase + newsPageUrl);
 }
 
 function getNewsPage(url) {
 	// request page, parse and add new feed items
+    if (settings.debug) { console.log('getNewsPage: ' + url); };
 	request(url, function (error, response, body) {
 		extractArticles(error, response, body, settings, httpRequest,  feed, callback);
 	});  
@@ -116,7 +129,6 @@ function extractArticles(error, response, body, settings, request, feed, callbac
 }
 
 function htmlToFeed(i, elem, feed, article) {
-	//console.log(that);
     var description, title, url, time;
     
 	description = article.find('p').text();
@@ -138,8 +150,11 @@ function writeFeedToFile(dir, url, feed, callback) {
         dir + url,
         feed,
         function (err) {
-            if (err) { throw err; }
-            callback();
+            if (err) { 
+                callback(err);
+            } else {
+                callback(null);
+            }
 		}
 	);
 }
