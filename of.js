@@ -25,9 +25,9 @@ Lancement : node of.js
 var fs = require('fs'),
     http = require('http'),
     request = require('request'),
-    rss = require('node-rss'),
-    wait = require('wait.for');
-require("/usr/local/lib/node_modules/node-codein");
+    rss = require('node-rss');
+
+//require("/usr/local/lib/node_modules/node-codein");
 
 var settings = JSON.parse(fs.readFileSync('config.json', encoding = "ascii"));
 var httpPort = settings.httpPort || 8001;
@@ -40,19 +40,31 @@ console.log("Server running at http://" + httpHost + ":" + httpPort);
 
 function onRequest(request, response) {
 
-	fs.stat(settings.feedsDir + request.url, function (err, stats) {
+	var objet = {};
+	objet.settings = settings;
+	objet.request = request;
+	objet.response = response;
+    
+    objet.feedId = objet.request.url.replace(/.+\//,'');
+    
+    if (objet.settings.debug) {
+        console.log('URL: ' + objet.request.url);
+        console.log('feedId: ' + objet.feedId);
+    }
+
+	fs.stat(objet.settings.feedsDir + objet.feedId, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('create feed'); }
-			createFeed(settings, request, response, function () { sendFeed(settings, request, response); });
+			createFeed(objet, sendFeed);
 		} else {
 			var fileDuration = (Date.now() - stats.ctime) / 1000 / 60;
 
 			if (settings.debug) { console.log("file created " + fileDuration + " min ago"); }
 
 			if (fileDuration > settings.cacheDuration) {
-				createFeed(settings, request, response, function () {sendFeed(settings, request, response); });
+				createFeed(objet, sendFeed);
 			} else {
-				sendFeed(settings, request, response);
+				sendFeed(objet);
 			}
 		}
 	});
@@ -64,36 +76,40 @@ function onRequest(request, response) {
  * send feed to client
 */
 
-function createFeed(settings, httpRequest, httpResponse, callback) {
+function createFeed(objet, callback) {
     var city, httpHost, siteUrl, feedLink, feed, newsPageUrl;
     
 	//city = httpRequest.url.replace(/\//gi, "");
-	city = httpRequest.url;
-	httpHost =  httpRequest.headers['x-forwarded-host'] || httpRequest.headers.host;
-	siteUrl = settings.urlBase + httpRequest.url;
-	feedLink = 'http://' + httpHost + httpRequest.url;
-	feed = newFeedHeader(settings, city, siteUrl, feedLink);
+	city = objet.request.url;
+	httpHost =  objet.request.headers['x-forwarded-host'] || objet.request.headers.host;
+	siteUrl = objet.settings.urlBase + objet.request.url;
+	feedLink = 'http://' + httpHost + objet.request.url;
+	objet.feed = newFeedHeader(objet.settings, city, siteUrl, feedLink);
 
 	console.log('GET: ' + siteUrl);
     // need to newsPageUrl to continue with no callback hell
-    newsPageUrl = wait.launchFiber(findNewsPageUrl, siteUrl, settings.urlBase);
-    //if (settings.debug) { console.log("news page at " + newsPageUrl); }
+	request(siteUrl, function(error, response, body) {
+		findNewsPageUrl(error, response, body, objet, getNewsPage);
+	});
 }
 
-function findNewsPageUrl(url){
-    var response, cheerio, newsPageUrl;
-	response = wait.for(request, url);
-    cheerio = require('cheerio'), $ = cheerio.load(response.body);
+function findNewsPageUrl(error, response, body, objet, callback){
+    var cheerio, newsPageUrl;
+
+    // TODO : gestion des erreurs
+    
+    cheerio = require('cheerio'), $ = cheerio.load(body);
     newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
-    if (settings.debug) { console.log('newsPageUrl: ' + newsPageUrl); };
-    getNewsPage(settings.urlBase + newsPageUrl);
+    newsPageUrl = objet.settings.urlBase + newsPageUrl;
+    if (objet.settings.debug) { console.log("news page: " + newsPageUrl); }
+	callback(objet, newsPageUrl);
 }
 
-function getNewsPage(url) {
+function getNewsPage(objet, url) {
 	// request page, parse and add new feed items
-    if (settings.debug) { console.log('getNewsPage: ' + url); };
 	request(url, function (error, response, body) {
-		extractArticles(error, response, body, settings, httpRequest,  feed, callback);
+		extractArticles(error, response, body, objet);
+		writeFeedToFile(objet, sendFeed);
 	});  
 }
 
@@ -112,20 +128,15 @@ function newFeedHeader(settings, city, url, link) {
 
 }
 
-function extractArticles(error, response, body, settings, request, feed, callback) {
+function extractArticles(error, response, body, objet) {
 	if (!error && response.statusCode === 200) {
 		var cheerio = require('cheerio'), $ = cheerio.load(body);
-		
+        
 		$('article').each(function (i, elem) {
-			htmlToFeed(i, elem, feed, this);
+			htmlToFeed(i, elem, objet.feed, this);
 		});
-
-		if (settings.debug) { console.log('write: ' + settings.feedsDir + request.url); }
-		
-		//var xmlFeed = rss.getFeedXML(feed);
-		writeFeedToFile(settings.feedsDir, request.url, rss.getFeedXML(feed), callback);
-
 	}
+    // TODO else…
 }
 
 function htmlToFeed(i, elem, feed, article) {
@@ -145,24 +156,24 @@ function htmlToFeed(i, elem, feed, article) {
 	feed.addNewItem(title, settings.urlBase + url, time, description, {});
 }
 
-function writeFeedToFile(dir, url, feed, callback) {
+function writeFeedToFile(objet, callback) {
     fs.writeFile(
-        dir + url,
-        feed,
+        objet.settings.feedsDir + '/' + objet.feedId,
+        rss.getFeedXML(objet.feed),
         function (err) {
             if (err) { 
-                callback(err);
+                // TODO
             } else {
-                callback(null);
+                callback(objet);
             }
 		}
 	);
 }
 
-function sendFeed(settings, httpRequest, httpResponse) {
-	feed = fs.readFileSync(settings.feedsDir + httpRequest.url, 'utf8');
-	httpResponse.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
-	httpResponse.end(feed);
-	if (settings.debug) { console.log('feed sent from file'); }
+function sendFeed(objet) {
+	feed = fs.readFileSync(objet.settings.feedsDir + '/' + objet.feedId, 'utf8');
+	objet.response.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
+	objet.response.end(feed);
+	if (objet.settings.debug) { console.log('feed sent from file'); }
 }
 
