@@ -55,7 +55,8 @@
             autoFocus: true,
             minLength: 3,
             select: function( event, ui ) {
-                        document.getElementById('results').innerHTML = '<img src="img/rss-icon.png" alt="RSS Icon" width="20", height="20"> <a href="'  + ui.item.url + '">Lien RSS</a>'
+												var feedUrl = ui.item.url.replace(/#resultat-recherche/, '');
+                        document.getElementById('results').innerHTML = '<img src="img/rss-icon.png" alt="RSS Icon" width="20", height="20"> <a href="'  + feedUrl + '">Lien RSS</a>'
                         ;}
         });
     </script>

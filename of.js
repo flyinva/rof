@@ -52,16 +52,15 @@ function onRequest(request, response) {
         console.log('feedId: ' + objet.feedId);
     }
 
-	fs.stat(objet.settings.feedsDir + objet.feedId, function (err, stats) {
+	fs.stat(objet.settings.feedsDir + '/' + objet.feedId, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('create feed'); }
 			createFeed(objet, sendFeed);
 		} else {
-			var fileDuration = (Date.now() - stats.ctime) / 1000 / 60;
+			var fileDuration = (Date.now() - stats.ctime) / 1000;
 
-			if (settings.debug) { console.log("file created " + fileDuration + " min ago"); }
-
-			if (fileDuration > settings.cacheDuration) {
+			if (objet.settings.debug) { console.log("file created " + fileDuration + " seconds"); }
+			if (fileDuration > objet.settings.cacheDuration) {
 				createFeed(objet, sendFeed);
 			} else {
 				sendFeed(objet);

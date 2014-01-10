@@ -3,6 +3,6 @@
     "urlPathBase" : "/liste/petite-locale-fait-du-jour/",
     "feedLang" : "fr",
     "feedsDir" : "rss",
-    "cacheDuration" : 2,
+    "cacheDuration" : 1800,
     "debug" : true
 }
