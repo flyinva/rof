@@ -23,9 +23,11 @@ Lancement : node of.js
 
 
 var fs = require('fs'),
-    http = require('http'),
+		http = require('http'),
+		url = require('url'),
     request = require('request'),
-    rss = require('node-rss');
+    rss = require('node-rss'),
+		sha1 = require('sha1');
 
 //require("/usr/local/lib/node_modules/node-codein");
 
@@ -40,28 +42,36 @@ console.log("Server running at http://" + httpHost + ":" + httpPort);
 
 function onRequest(request, response) {
 
-	var objet = {};
+	var objet = {}, urlParts;
 	objet.settings = settings;
 	objet.request = request;
 	objet.response = response;
+	var urlParts = url.parse(request.url, true);
+	objet.urlPathName = urlParts.pathname;
+	objet.urlQuery = urlParts.query;
+	if (objet.settings.debug) {
+		console.log('URL PATH: ' + objet.urlPathName);
+		console.log('URL PARAM: ' + objet.urlQuery.q);
+	}
     
-    objet.feedId = objet.request.url.replace(/.+\//,'');
+	//objet.feedId = objet.request.url.replace(/.+\//,'');
+	objet.feedId = sha1(objet.request.url);
     
     if (objet.settings.debug) {
         console.log('URL: ' + objet.request.url);
         console.log('feedId: ' + objet.feedId);
     }
 
-	fs.stat(objet.settings.feedsDir + objet.feedId, function (err, stats) {
+	fs.stat(objet.settings.feedsDir + '/' + objet.feedId, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('create feed'); }
 			createFeed(objet, sendFeed);
 		} else {
-			var fileDuration = (Date.now() - stats.ctime) / 1000 / 60;
+			var fileDuration = (Date.now() - stats.ctime) / 1000;
 
-			if (settings.debug) { console.log("file created " + fileDuration + " min ago"); }
+			if (objet.settings.debug) { console.log("file created " + fileDuration + " seconds"); }
 
-			if (fileDuration > settings.cacheDuration) {
+			if (fileDuration > objet.settings.cacheDuration) {
 				createFeed(objet, sendFeed);
 			} else {
 				sendFeed(objet);
@@ -80,10 +90,10 @@ function createFeed(objet, callback) {
     var city, httpHost, siteUrl, feedLink, feed, newsPageUrl;
     
 	//city = httpRequest.url.replace(/\//gi, "");
-	city = objet.request.url;
+	city = objet.urlPathName;
 	httpHost =  objet.request.headers['x-forwarded-host'] || objet.request.headers.host;
-	siteUrl = objet.settings.urlBase + objet.request.url;
-	feedLink = 'http://' + httpHost + objet.request.url;
+	siteUrl = objet.settings.urlBase + objet.urlPathName;
+	feedLink = 'http://' + httpHost + objet.urlPathName;
 	objet.feed = newFeedHeader(objet.settings, city, siteUrl, feedLink);
 
 	console.log('GET: ' + siteUrl);
@@ -106,6 +116,8 @@ function findNewsPageUrl(error, response, body, objet, callback){
 }
 
 function getNewsPage(objet, url) {
+	if (objet.settings.debug) { console.log("GET news page") };
+
 	// request page, parse and add new feed items
 	request(url, function (error, response, body) {
 		extractArticles(error, response, body, objet);
