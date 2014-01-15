@@ -15,19 +15,22 @@ Modules NPM nécessaires :
  - request : interroge le serveur web
  - cheerio : utilisé pour parser la page à la mode jquery
  - node-rss : génération du XML/RSS
+ - sha1
 
 Lancement : node of.js
 
 */
 
-
+// use as database to stored called URL and new page URL
+var database = {};
+GLOBAL.database = database;
 
 var fs = require('fs'),
-		http = require('http'),
-		url = require('url'),
+    http = require('http'),
+	url = require('url'),
     request = require('request'),
     rss = require('node-rss'),
-		sha1 = require('sha1');
+	sha1 = require('sha1');
 
 //require("/usr/local/lib/node_modules/node-codein");
 
@@ -46,15 +49,6 @@ function onRequest(request, response) {
 	objet.settings = settings;
 	objet.request = request;
 	objet.response = response;
-	var urlParts = url.parse(request.url, true);
-	objet.urlPathName = urlParts.pathname;
-	objet.urlQuery = urlParts.query;
-	if (objet.settings.debug) {
-		console.log('URL PATH: ' + objet.urlPathName);
-		console.log('URL PARAM: ' + objet.urlQuery.q);
-	}
-    
-	//objet.feedId = objet.request.url.replace(/.+\//,'');
 	objet.feedId = sha1(objet.request.url);
     
     if (objet.settings.debug) {
@@ -62,17 +56,34 @@ function onRequest(request, response) {
         console.log('feedId: ' + objet.feedId);
     }
 
-	fs.stat(objet.settings.feedsDir + '/' + objet.feedId, function (err, stats) {
+    if ( ! database[objet.feedId] ) {
+        if (settings.debug) { console.log('feedId not in database'); }
+        findNewsPageUrl(objet, isFeedInCache);
+    } else {
+        if (settings.debug) { console.log('feedId in database : ' + database[objet.feedId]); }
+        isFeedInCache(objet, objet.request.url);
+    }
+    
+
+}
+
+function isFeedInCache (objet, url) {
+    
+    var file;
+    file = sha1(url);
+    objet.feed = newFeedHeader(objet, url);
+    
+    fs.stat(objet.settings.feedsDir + '/' + file, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('create feed'); }
-			createFeed(objet, sendFeed);
+			getNewsPage(objet, url, sendFeed);
 		} else {
 			var fileDuration = (Date.now() - stats.ctime) / 1000;
 
 			if (objet.settings.debug) { console.log("file created " + fileDuration + " seconds"); }
 
 			if (fileDuration > objet.settings.cacheDuration) {
-				createFeed(objet, sendFeed);
+				getNewsPage(objet, url, sendFeed);
 			} else {
 				sendFeed(objet);
 			}
@@ -80,43 +91,28 @@ function onRequest(request, response) {
 	});
 }
 
-/*
- * get HTML page and generate a RSS feed
- * save feed to file
- * send feed to client
-*/
+function findNewsPageUrl(objet, callback){
+    var cheerio, siteUrl, newsPageUrl;
 
-function createFeed(objet, callback) {
-    var city, httpHost, siteUrl, feedLink, feed, newsPageUrl;
+    siteUrl = objet.settings.urlBase + objet.request.url;
     
-	//city = httpRequest.url.replace(/\//gi, "");
-	city = objet.urlPathName;
-	httpHost =  objet.request.headers['x-forwarded-host'] || objet.request.headers.host;
-	siteUrl = objet.settings.urlBase + objet.urlPathName;
-	feedLink = 'http://' + httpHost + objet.urlPathName;
-	objet.feed = newFeedHeader(objet.settings, city, siteUrl, feedLink);
+    // get the page to extract local news page URL
+    // cb : get local news page and create the feed
+    request(siteUrl, function(error, response, body) {
+		// TODO : gestion des erreurs
+        cheerio = require('cheerio'), $ = cheerio.load(body);
+        newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
+        newsPageUrl = objet.settings.urlBase + newsPageUrl;
+        database[objet.feedId] = newsPageUrl;
+        
+        if (objet.settings.debug) { console.log("news page: " + newsPageUrl); }
 
-	console.log('GET: ' + siteUrl);
-    // need to newsPageUrl to continue with no callback hell
-	request(siteUrl, function(error, response, body) {
-		findNewsPageUrl(error, response, body, objet, getNewsPage);
+        callback(objet, newsPageUrl);
 	});
 }
 
-function findNewsPageUrl(error, response, body, objet, callback){
-    var cheerio, newsPageUrl;
-
-    // TODO : gestion des erreurs
-    
-    cheerio = require('cheerio'), $ = cheerio.load(body);
-    newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
-    newsPageUrl = objet.settings.urlBase + newsPageUrl;
-    if (objet.settings.debug) { console.log("news page: " + newsPageUrl); }
-	callback(objet, newsPageUrl);
-}
-
-function getNewsPage(objet, url) {
-	if (objet.settings.debug) { console.log("GET news page") };
+function getNewsPage(objet, url, callback) {
+	if (objet.settings.debug) { console.log("GET news page from " + url) };
 
 	// request page, parse and add new feed items
 	request(url, function (error, response, body) {
@@ -125,15 +121,22 @@ function getNewsPage(objet, url) {
 	});  
 }
 
-function newFeedHeader(settings, city, url, link) {
+function newFeedHeader(objet, url) {
+    var httpHost, siteUrl, feedLink, city;
+    
+    // TODO get title from news page
+    city = '';
+    httpHost =  objet.request.headers['x-forwarded-host'] || objet.request.headers.host;
+	feedLink = 'http://' + httpHost + objet.request.url;
+    
 	// Define new feed options
     var feed = rss.createNewFeed(
         'Ouest France ' + city,
         url,
 		'',
 		'Flyinva <flyinva@kabano.net>',
-        link,
-        {language : settings.feedLang }
+        feedLink,
+        {language : objet.settings.feedLang }
     );
 
 	return (feed);
