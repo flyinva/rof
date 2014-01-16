@@ -74,9 +74,7 @@ function isFeedInCache (objet, url) {
         console.log('is ' + url + ' in cache ?');
         console.log('file: ' + objet.settings.feedsDir + '/' + file );
     }
-    
-    objet.feed = newFeedHeader(objet, url);
-        
+            
     fs.stat(objet.settings.feedsDir + '/' + file, function (err, stats) {
 		if (err) {
 			if (settings.debug) { console.log('no, creating feed'); }
@@ -121,25 +119,29 @@ function getNewsPage(objet, url, callback) {
     
 	if (objet.settings.debug) { console.log("GET local news page from " + url) };
 
-	// request page, parse and add new feed items
+    // request page, parse and add new feed items
 	request(url, function (error, response, body) {
-		extractArticles(error, response, body, objet);
-		writeFeedToFile(objet, sendFeed);
+        if (!error && response.statusCode === 200) {
+            var cheerio = require('cheerio'), body = cheerio.load(body);
+            objet.feed = newFeedHeader(objet, url, body);
+            extractArticles(error, response, body, objet);
+            writeFeedToFile(objet, sendFeed);
+        }
+        // TODO else…
 	});  
 }
 
-function newFeedHeader(objet, url) {
-    var httpHost, siteUrl, feedLink, city;
+function newFeedHeader(objet, url, body) {
+    var httpHost, siteUrl, feedLink, title;
     
-    // TODO get title from news page
-    city = '';
+    title = $('h1.titre-rub.pull-left').text();
     httpHost =  objet.request.headers['x-forwarded-host'] || objet.request.headers.host;
 	feedLink = 'http://' + httpHost + objet.request.url;
     
 	// Define new feed options
     var feed = rss.createNewFeed(
-        'Ouest France ' + city,
-        objet.settings.urlBase + url,
+        'Ouest-France ' + title,
+        url,
 		'',
 		'Flyinva <flyinva@kabano.net>',
         feedLink,
@@ -151,14 +153,9 @@ function newFeedHeader(objet, url) {
 }
 
 function extractArticles(error, response, body, objet) {
-	if (!error && response.statusCode === 200) {
-		var cheerio = require('cheerio'), $ = cheerio.load(body);
-        
-		$('article').each(function (i, elem) {
-			htmlToFeed(i, elem, objet.feed, this);
-		});
-	}
-    // TODO else…
+	body('article').each(function (i, elem) {
+		htmlToFeed(i, elem, objet.feed, this);
+	});
 }
 
 function htmlToFeed(i, elem, feed, article) {
