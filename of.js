@@ -27,10 +27,10 @@ GLOBAL.database = database;
 
 var fs = require('fs'),
     http = require('http'),
-	url = require('url'),
+		url = require('url'),
     request = require('request'),
     rss = require('node-rss'),
-	sha1 = require('sha1');
+		sha1 = require('sha1');
 
 //require("/usr/local/lib/node_modules/node-codein");
 
@@ -56,7 +56,7 @@ function onRequest(request, response) {
         console.log('feedId: ' + objet.feedId);
     }
 
-    if ( ! database[objet.feedId] ) {
+    if (!database[objet.feedId]) {
         if (settings.debug) { console.log('feedId not in database'); }
         findNewsPageUrl(objet, isFeedInCache);
     } else {
