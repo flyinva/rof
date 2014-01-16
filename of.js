@@ -61,28 +61,33 @@ function onRequest(request, response) {
         findNewsPageUrl(objet, isFeedInCache);
     } else {
         if (settings.debug) { console.log('feedId in database : ' + database[objet.feedId]); }
-        isFeedInCache(objet, objet.request.url);
+        isFeedInCache(objet, database[objet.feedId]);
     }
-    
-
 }
 
 function isFeedInCache (objet, url) {
     
     var file;
-    file = sha1(url);
-    objet.feed = newFeedHeader(objet, url);
+    file = objet.feedId;
     
+    if (settings.debug) { 
+        console.log('is ' + url + ' in cache ?');
+        console.log('file: ' + objet.settings.feedsDir + '/' + file );
+    }
+    
+    objet.feed = newFeedHeader(objet, url);
+        
     fs.stat(objet.settings.feedsDir + '/' + file, function (err, stats) {
 		if (err) {
-			if (settings.debug) { console.log('create feed'); }
+			if (settings.debug) { console.log('no, creating feed'); }
 			getNewsPage(objet, url, sendFeed);
 		} else {
 			var fileDuration = (Date.now() - stats.ctime) / 1000;
 
-			if (objet.settings.debug) { console.log("file created " + fileDuration + " seconds"); }
+			if (objet.settings.debug) { console.log("yes from " + fileDuration + " seconds"); }
 
 			if (fileDuration > objet.settings.cacheDuration) {
+                if (settings.debug) { console.log('too old, creating feed'); }
 				getNewsPage(objet, url, sendFeed);
 			} else {
 				sendFeed(objet);
@@ -102,7 +107,6 @@ function findNewsPageUrl(objet, callback){
 		// TODO : gestion des erreurs
         cheerio = require('cheerio'), $ = cheerio.load(body);
         newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
-        newsPageUrl = objet.settings.urlBase + newsPageUrl;
         database[objet.feedId] = newsPageUrl;
         
         if (objet.settings.debug) { console.log("news page: " + newsPageUrl); }
@@ -112,7 +116,10 @@ function findNewsPageUrl(objet, callback){
 }
 
 function getNewsPage(objet, url, callback) {
-	if (objet.settings.debug) { console.log("GET news page from " + url) };
+    
+    url = objet.settings.urlBase + url;
+    
+	if (objet.settings.debug) { console.log("GET local news page from " + url) };
 
 	// request page, parse and add new feed items
 	request(url, function (error, response, body) {
@@ -132,7 +139,7 @@ function newFeedHeader(objet, url) {
 	// Define new feed options
     var feed = rss.createNewFeed(
         'Ouest France ' + city,
-        url,
+        objet.settings.urlBase + url,
 		'',
 		'Flyinva <flyinva@kabano.net>',
         feedLink,
@@ -172,6 +179,9 @@ function htmlToFeed(i, elem, feed, article) {
 }
 
 function writeFeedToFile(objet, callback) {
+    
+    if (objet.settings.debug) { console.log("writing " + objet.feedId) };
+    
     fs.writeFile(
         objet.settings.feedsDir + '/' + objet.feedId,
         rss.getFeedXML(objet.feed),
