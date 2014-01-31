@@ -48,19 +48,19 @@ function onRequest(request, response) {
 	objet.settings = settings;
 	objet.request = request;
 	objet.response = response;
-	objet.feedId = sha1(objet.request.url);
+	objet.resquestedUrlHash = sha1(objet.request.url);
 	
 	if (objet.settings.debug) {
 		console.log('URL: ' + objet.request.url);
-		console.log('feedId: ' + objet.feedId);
+		console.log('resquestedUrlHash: ' + objet.resquestedUrlHash);
 	}
 
-	if ( !database[objet.feedId ]) {
-		if (settings.debug) { console.log('feedId not in database'); }
+	if ( !database[objet.resquestedUrlHash ]) {
+		if (settings.debug) { console.log('resquestedUrlHash not in database'); }
 		findNewsPageUrl(objet, isFeedInCache);
 	} else {
-		if (settings.debug) { console.log('feedId in database : ' + database[objet.feedId]); }
-		isFeedInCache(objet, database[objet.feedId]);
+		if (settings.debug) { console.log('resquestedUrlHash in database : ' + database[objet.resquestedUrlHash]); }
+		isFeedInCache(objet, database[objet.resquestedUrlHash]);
 	}
 }
 
@@ -70,8 +70,7 @@ function isFeedInCache (objet, url) {
 	file = sha1(url);
 	
 	if (settings.debug) { 
-		console.log('is ' + url + ' in cache ?');
-		console.log('file: ' + objet.settings.feedsDir + '/' + file );
+		console.log('is ' + objet.settings.feedsDir + '/' + file + ' in cache ?' );
 	}
 			
 	fs.stat(objet.settings.feedsDir + '/' + file, function (err, stats) {
@@ -87,7 +86,7 @@ function isFeedInCache (objet, url) {
 				if (settings.debug) { console.log('too old, creating feed'); }
 				getNewsPage(objet, url, sendFeed);
 			} else {
-				sendFeed(objet);
+				sendFeed(objet, file);
 			}
 		}
 	});
@@ -104,7 +103,7 @@ function findNewsPageUrl(objet, callback){
 		// TODO : gestion des erreurs
 		cheerio = require('cheerio'), $ = cheerio.load(body);
 		newsPageUrl = $('section.bloc-actu.actu-vignettes a.lien-all').attr('href');
-		database[objet.feedId] = newsPageUrl;
+		database[objet.resquestedUrlHash] = newsPageUrl;
 		
 		if (objet.settings.debug) { console.log("news page: " + newsPageUrl); }
 
@@ -176,26 +175,26 @@ function htmlToFeed(i, elem, feed, article) {
 
 function writeFeedToFile(objet, urlPath, callback) {
 	
-	var file;
-	file = sha1(urlPath);
+	var filename;
+	filename = sha1(urlPath);
 
-	if (objet.settings.debug) { console.log("writing " + file) };
+	if (objet.settings.debug) { console.log("writing " + filename) };
 	
 	fs.writeFile(
-		objet.settings.feedsDir + '/' + file,
+		objet.settings.feedsDir + '/' + filename,
 		rss.getFeedXML(objet.feed),
 		function (err) {
 			if (err) { 
 				// TODO
 			} else {
-				callback(objet);
+				callback(objet, filename);
 			}
 		}
 	);
 }
 
-function sendFeed(objet) {
-	feed = fs.readFileSync(objet.settings.feedsDir + '/' + objet.feedId, 'utf8');
+function sendFeed(objet, filename) {
+	feed = fs.readFileSync(objet.settings.feedsDir + '/' + filename, 'utf8');
 	objet.response.writeHead(200, {'Content-Type': 'application/x-rss+xml'});
 	objet.response.end(feed);
 	if (objet.settings.debug) { console.log('feed sent from file'); }
